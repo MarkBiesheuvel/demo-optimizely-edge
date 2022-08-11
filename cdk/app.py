@@ -23,7 +23,7 @@ class OptimizelyEdgeStack(Stack):
 
         # Determine domain name and sub domain from the context variables
         domain_name = self.node.try_get_context('domainName')
-        subdomain = 'web.{}'.format(domain_name)
+        subdomain = 'edge.{}'.format(domain_name)
 
         # Assumption: Hosted Zone is created outside of this project
         # Fetch the Route53 Hosted Zone
@@ -44,6 +44,51 @@ class OptimizelyEdgeStack(Stack):
             destination_bucket=bucket,
             prune=False,
             retain_on_delete=False,
+        )
+
+        # Give a CloudFront OAI access to the S3 bucket
+        origin_identity = cloudfront.OriginAccessIdentity(self, 'Identity')
+        bucket.grant_read(origin_identity.grant_principal)
+
+        # Public SSL certificate for subdomain
+        certificate = acm.DnsValidatedCertificate(
+            self, 'Certificate',
+            domain_name=subdomain,
+            hosted_zone=zone,
+            region='us-east-1',
+        )
+
+        # Content Delivery Network
+        distribution = cloudfront.Distribution(
+            self, 'CDN',
+            default_root_object='index.html',
+            domain_names=[subdomain],
+            certificate=certificate,
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3Origin(
+                    bucket=bucket,
+                    origin_access_identity=origin_identity,
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+            )
+        )
+
+        # Both IPv4 and IPv6 addresses
+        target = route53.RecordTarget.from_alias(
+            alias_target=targets.CloudFrontTarget(distribution)
+        )
+        route53.AaaaRecord(
+            self, 'DnsRecordIpv6',
+            record_name=subdomain,
+            target=target,
+            zone=zone,
+        )
+        route53.ARecord(
+            self, 'DnsRecordIpv4',
+            record_name=subdomain,
+            target=target,
+            zone=zone,
         )
 
 
