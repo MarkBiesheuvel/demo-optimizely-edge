@@ -23,7 +23,8 @@ class OptimizelyEdgeStack(Stack):
 
         # Determine domain name and sub domain from the context variables
         domain_name = self.node.try_get_context('domainName')
-        subdomain = 'edge.{}'.format(domain_name)
+        web_subdomain = 'edge.{}'.format(domain_name)
+        edge_subdomain = 'edge-decider.{}'.format(domain_name)
 
         # Assumption: Hosted Zone is created outside of this project
         # Fetch the Route53 Hosted Zone
@@ -53,7 +54,7 @@ class OptimizelyEdgeStack(Stack):
         # Public SSL certificate for subdomain
         certificate = acm.DnsValidatedCertificate(
             self, 'Certificate',
-            domain_name=subdomain,
+            domain_name=web_subdomain,
             hosted_zone=zone,
             region='us-east-1',
         )
@@ -62,7 +63,7 @@ class OptimizelyEdgeStack(Stack):
         distribution = cloudfront.Distribution(
             self, 'CDN',
             default_root_object='index.html',
-            domain_names=[subdomain],
+            domain_names=[web_subdomain],
             certificate=certificate,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(
@@ -80,14 +81,23 @@ class OptimizelyEdgeStack(Stack):
         )
         route53.AaaaRecord(
             self, 'DnsRecordIpv6',
-            record_name=subdomain,
+            record_name=web_subdomain,
             target=target,
             zone=zone,
         )
         route53.ARecord(
             self, 'DnsRecordIpv4',
-            record_name=subdomain,
+            record_name=web_subdomain,
             target=target,
+            zone=zone,
+        )
+
+        # CNAME to the Optimizely Edge Decider
+        route53.CnameRecord(
+            self, 'DnsRecordEdgeCname',
+            record_name=edge_subdomain,
+            domain_name='cname.optimizely-edge.com',
+            ttl=Duration.minutes(5),
             zone=zone,
         )
 
