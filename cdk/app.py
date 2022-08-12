@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_certificatemanager as acm,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
+    aws_lambda as lambda_,
     aws_route53 as route53,
     aws_route53_targets as targets,
     aws_s3 as s3,
@@ -71,7 +72,7 @@ class OptimizelyEdgeStack(Stack):
                     origin_access_identity=origin_identity,
                 ),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
             )
         )
 
@@ -92,13 +93,38 @@ class OptimizelyEdgeStack(Stack):
             zone=zone,
         )
 
-        # CNAME to the Optimizely Edge Decider
-        route53.CnameRecord(
-            self, 'DnsRecordEdgeCname',
-            record_name=edge_subdomain,
-            domain_name='cname.optimizely-edge.com',
-            ttl=Duration.minutes(5),
-            zone=zone,
+        # Performance Edge - CDN Proxy
+        viewer_request_function = cloudfront.Function(
+            self, 'ViewerRequestFunction',
+            code=cloudfront.FunctionCode.from_file(
+                file_path='src/viewer-request/index.js'
+            ),
+        )
+        origin_request_policy = cloudfront.OriginRequestPolicy(
+            self, 'OriginRequestPolicy',
+            header_behavior=cloudfront.OriginRequestHeaderBehavior.allow_list(
+                'User-Agent',
+                'Referer',
+            ),
+            cookie_behavior=cloudfront.OriginRequestCookieBehavior.allow_list(
+                'optimizelyEndUserId',
+                'optimizelyRedirectData',
+                'optimizelyDomainTestCookie',
+                'optimizelyOptOut',
+            ),
+        )
+        distribution.add_behavior(
+            path_pattern='optimizely-edge/*',
+            origin=origins.HttpOrigin('optimizely-edge.com'),
+            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED, # TODO: create custom CachePolicy
+            origin_request_policy=origin_request_policy,
+            function_associations=[
+                cloudfront.FunctionAssociation(
+                    event_type=cloudfront.FunctionEventType.VIEWER_REQUEST,
+                    function=viewer_request_function,
+                )
+            ],
         )
 
 
