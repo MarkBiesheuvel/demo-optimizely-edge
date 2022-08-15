@@ -114,10 +114,10 @@ class OptimizelyEdgeStack(Stack):
             ),
         )
         distribution.add_behavior(
-            path_pattern='optimizely-edge/*',
+            path_pattern='optimizely-edge/*.js',
             origin=origins.HttpOrigin('optimizely-edge.com'),
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED, # TODO: create custom CachePolicy
+            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
             origin_request_policy=origin_request_policy,
             function_associations=[
                 cloudfront.FunctionAssociation(
