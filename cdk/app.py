@@ -17,15 +17,14 @@ from aws_cdk import (
 )
 
 
-class OptimizelyEdgeStack(Stack):
+class OptimizelyPerformanceEdgeStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Determine domain name and sub domain from the context variables
         domain_name = self.node.try_get_context('domainName')
-        web_subdomain = 'edge.{}'.format(domain_name)
-        edge_subdomain = 'edge-decider.{}'.format(domain_name)
+        web_subdomain = 'performance-edge.{}'.format(domain_name)
 
         # Assumption: Hosted Zone is created outside of this project
         # Fetch the Route53 Hosted Zone
@@ -129,7 +128,7 @@ class OptimizelyEdgeStack(Stack):
 
 
 app = App()
-OptimizelyEdgeStack(app, 'OptimizelyEdge',
+OptimizelyPerformanceEdgeStack(app, 'OptimizelyPerformanceEdge',
     env=Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
         region=os.getenv('CDK_DEFAULT_REGION')
